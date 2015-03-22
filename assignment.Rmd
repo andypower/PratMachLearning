@@ -1,0 +1,138 @@
+---
+title: "Practical Machine Learning Assignment"
+author: "Nazzareno Sileno"
+date: "03/22/2015"
+output:
+  html_document:
+    theme: spacelab
+---
+
+# Executive Summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+This report uses data from accelerometers of six participants to predict how well they were doing the exercise in terms of the classification in the data. 
+
+###Setting the working dir
+
+```{r}
+#Setting the local working dir
+setwd("D:/Google Drive/Dottorato/Anno I/Corsi/Practical Machine Learning/Progetto")
+
+#This package works only on Windows OS
+#install.packages("doParallel")
+```
+
+
+###Loading Libraries
+
+Using principally the caret machine learning library and the random forest. Loading the doParallel library to give boost to the operations using parallel computations.
+
+```{r}
+library(caret)
+library(kernlab)
+library(randomForest)
+#Trying to give boost to the operations using parallel computations
+library(doParallel)
+```
+
+###Reading Data
+
+Reading the pml-training csv file for training and
+cleaning the data by removing columns with NAs etc
+
+```{r}
+training<-read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+#The same to the pml-testing data
+testing<-read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+```
+
+###Cleaning Data
+
+Removing the first five columns. These are
+
+* "" -> used as id
+* "user_name"
+* "raw_timestamp_part_1"
+* "raw_timestamp_part_2"
+* "cvtd_timestamp"
+
+```{r, echo=FALSE}
+#removing the first five columns
+training<-training[,-c(1:5)]
+```
+
+Assigning values to NAs. The mean of column values will be assigned to NAs.
+
+```{r}
+#Calculating mean for each integer and numerics columns
+#assigning means to NAs
+for (colName in names(training)){
+  
+  if(class(training[[colName]]) %in% c("integer", "numeric")){
+    m<-mean(training[[colName]], na.rm = TRUE)
+    training[[colName]][is.na(training[[colName]])]<-m
+  }
+  
+}
+```
+
+Removing the columns where variance is near to zero.
+
+```{r}
+training<-training[,-nearZeroVar(training)]
+```
+
+###Splitting the dataset
+
+```{r}
+index <- createDataPartition(y=training$classe, p=0.6, list=FALSE)
+trainingData <- training[index, ]
+testingData <- training[-index, ]
+```
+
+###Training phase
+
+Training using Random Forest algorithm and three Cross Validation.
+The Random Forest algorithm was applyed to predict the classification because it has methods for balancing error in class population unbalanced data sets.
+
+```{r}
+train_control <- trainControl(method="cv", number=3)
+model <- train(classe~., data=trainingData, method="rf", trControl = train_control)
+```
+
+###Prediction phase
+
+Making predictions on training dataset and on testing dataset obtaining error rates: In sample error rate and Out of sampe error rate
+
+```{r}
+answers <- predict(model, trainingData, type="raw")
+c<-confusionMatrix(answers, trainingData$classe)
+print("Calculated in sample error rate")
+print(1-c[["overall"]][["Accuracy"]])
+
+answers <- predict(model, testingData, type="raw")
+c<-confusionMatrix(answers, testingData$classe)
+print("Calculated out of sample error rate")
+print(1-c[["overall"]][["Accuracy"]])
+```
+
+###Generating data using the suggested code
+
+```{r}
+#generate data for submitting
+answers <- predict(model, testing, type="raw")
+
+pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("problem_id_",i,".txt")
+        write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+}
+
+pml_write_files(answers)
+```
+
+
+### Conclusions
+It's possible to say that using the various infos coming from multiple measuring instruments it is possible accurately predict how well a person is preforming an excercise using only a relatively simple model. 
